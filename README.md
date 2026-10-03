@@ -75,6 +75,22 @@ TRUST_PROXY_HOPS 要与反代层数一致。不要在反代给 /widget 统一加
 
 配置页面位于 /admin，使用 .env 的 ADMIN_TOKEN 登录。该令牌仅用于平台运营配置，客服人员继续使用 Chatwoot 账号。
 
+### 没有域名时临时通过 IP 测试
+
+更新镜像和两个 Compose 文件后，在 `.env` 设置以下值（替换示例 IP）：
+
+```dotenv
+PUBLIC_URL=http://192.0.2.1:6001
+SUPPORT_PORT=6001
+SUPPORT_BIND_ADDRESS=0.0.0.0
+CHATWOOT_PUBLIC_URL=http://192.0.2.1:6002
+CHATWOOT_FORCE_SSL=false
+TRUST_PROXY_HOPS=0
+ALLOW_HTTP_UPSTREAMS=true
+```
+
+重建容器后，三个服务分别通过 IP 的 6001、6002、6003 端口访问。防火墙需允许对应访问；Chatwoot 也必须能访问客服回调。HTTP 会明文传输登录令牌和消息，仅供临时测试；HTTPS 网站无法嵌入 HTTP 客服页面。正式接入时配置 HTTPS 并恢复回环绑定、Chatwoot 强制 HTTPS 及匹配反代层数的 TRUST_PROXY_HOPS。已有项目更换 PUBLIC_URL 后需重新连接机器人以更新回调地址。
+
 ### 健康检查与日志
 
 ```bash

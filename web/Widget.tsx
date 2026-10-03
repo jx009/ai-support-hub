@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Bootstrap, Conversation, Message } from "./types";
+import { requestKey } from "./request-key";
 const statusLabel: Record<string, string> = {
   pending: "AI 接待",
   open: "待处理",
@@ -30,8 +31,8 @@ export default function Widget() {
     currentRef = useRef(current),
     pane = useRef<HTMLDivElement>(null);
   const sendKey = useRef<{ text: string; key: string } | null>(null),
-    createKey = useRef(crypto.randomUUID()),
-    ticketKey = useRef(crypto.randomUUID()),
+    createKey = useRef(requestKey()),
+    ticketKey = useRef(requestKey()),
     polling = useRef(false);
   bootRef.current = boot;
   currentRef.current = current;
@@ -187,7 +188,7 @@ export default function Widget() {
     setSending(true);
     setError("");
     if (sendKey.current?.text !== text)
-      sendKey.current = { text, key: crypto.randomUUID() };
+      sendKey.current = { text, key: requestKey() };
     try {
       const c = await ensureConversation();
       await call(
@@ -209,7 +210,7 @@ export default function Widget() {
   function newChat() {
     setCurrent(null);
     currentRef.current = null;
-    createKey.current = crypto.randomUUID();
+    createKey.current = requestKey();
     sendKey.current = null;
     setDraft("");
     setMessages([]);
@@ -220,7 +221,7 @@ export default function Widget() {
   function openTicket() {
     setCategory(boot?.project.categories[0]?.code || "");
     setDescription("");
-    ticketKey.current = crypto.randomUUID();
+    ticketKey.current = requestKey();
     setTicketOpen(true);
   }
   async function submitTicket(e: React.FormEvent) {

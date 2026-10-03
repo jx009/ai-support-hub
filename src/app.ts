@@ -35,6 +35,7 @@ const asyncRoute =
     Promise.resolve(fn(req, res)).catch(next);
   };
 export function createApp(db: Database, config: Config) {
+  const publicHttps = new URL(config.PUBLIC_URL).protocol === "https:";
   const app = express(),
     projects = new Projects(db, config),
     support = new Support(db, projects);
@@ -43,6 +44,7 @@ export function createApp(db: Database, config: Config) {
   app.use(
     helmet({
       frameguard: false,
+      strictTransportSecurity: publicHttps ? undefined : false,
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
@@ -52,6 +54,7 @@ export function createApp(db: Database, config: Config) {
           connectSrc: ["'self'"],
           frameAncestors: ["'self'"],
           objectSrc: ["'none'"],
+          upgradeInsecureRequests: publicHttps ? [] : null,
         },
       },
     }),
