@@ -1,6 +1,7 @@
 import type { Config } from "./config.js";
 import type { CWMessage, Project } from "./model.js";
 import { AppError } from "./security.js";
+import { request, type Dispatcher } from "undici";
 export async function jsonRequest(
   url: string,
   headers: Record<string, string>,
@@ -8,14 +9,17 @@ export async function jsonRequest(
   body?: unknown,
   timeout = 15000,
 ): Promise<any> {
-  let res: Response;
+  let res: Dispatcher.ResponseData;
   try {
-    res = await fetch(url, {
-      method,
+    // Explicit transport deadlines avoid fetch's shorter built-in header wait.
+    res = await request(url, {
+      method: method as Dispatcher.HttpMethod,
       headers: { "Content-Type": "application/json", ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeout),
-      redirect: "error",
+      headersTimeout: timeout,
+      bodyTimeout: timeout,
+      maxRedirections: 0,
     });
   } catch {
     throw new AppError(
@@ -24,14 +28,17 @@ export async function jsonRequest(
       "UPSTREAM_UNAVAILABLE",
     );
   }
-  if (!res.ok)
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    // Cancelling the unused body emits an abort error on this Node stream.
+    res.body.on("error", () => undefined);
+    res.body.destroy();
     throw new AppError(
       502,
-      "上游接口返回错误（" + res.status + "）",
+      "上游接口返回错误（" + res.statusCode + "）",
       "UPSTREAM_ERROR",
     );
-  if (res.status === 204) return {};
-  const raw = await res.text();
+  }
+  const raw = await res.body.text();
   if (!raw.trim()) return {};
   if (raw.length > 4_000_000) throw new AppError(502, "上游响应过大");
   try {

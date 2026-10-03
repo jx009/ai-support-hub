@@ -42,9 +42,12 @@ export class Worker {
     await Promise.allSettled(this.active);
   }
   async step() {
+    // Allow the full AI deadline plus message synchronization before recovery.
+    const staleAfterMs = Math.max(180000, this.projects.config.AI_TIMEOUT_MS + 120000);
     const jobs = (
       await this.db.query(
-        "SELECT * FROM ai_jobs WHERE (state='pending' AND next_at<=now()) OR (state='running' AND updated_at<now()-interval '3 minutes') ORDER BY message_id LIMIT 10",
+        "SELECT * FROM ai_jobs WHERE (state='pending' AND next_at<=now()) OR (state='running' AND updated_at<now()-($1::double precision * interval '1 millisecond')) ORDER BY message_id LIMIT 10",
+        [staleAfterMs],
       )
     ).rows;
     for (const candidate of jobs) {
@@ -52,8 +55,8 @@ export class Worker {
         "ai:" + candidate.conversation_id,
         async () => {
           const job = await this.db.one(
-            "SELECT * FROM ai_jobs WHERE id=$1 AND ((state='pending' AND next_at<=now()) OR (state='running' AND updated_at<now()-interval '3 minutes'))",
-            [candidate.id],
+            "SELECT * FROM ai_jobs WHERE id=$1 AND ((state='pending' AND next_at<=now()) OR (state='running' AND updated_at<now()-($2::double precision * interval '1 millisecond')))",
+            [candidate.id, staleAfterMs],
           );
           if (!job) return false;
           const older = await this.db.one(

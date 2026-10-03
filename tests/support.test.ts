@@ -220,6 +220,26 @@ describe("AI-first conversations and tickets", () => {
     expect(r.data.conversation.ticket).toBe(false);
     expect(r.data.conversation.status).toBe("pending");
   });
+  it("does not reclaim a long AI task until its ten-minute deadline and recovery margin expire", async () => {
+    const previousTimeout = f.config.AI_TIMEOUT_MS;
+    f.config.AI_TIMEOUT_MS = 600000;
+    try {
+      const boot = (await f.bootstrap(f.project, 'long-ai-deadline')).data;
+      const id = await chat(boot);
+      await api(boot, '/conversations/' + id + '/messages', 'POST', { content: '等待较长时间的问答' });
+      await waitFor(async () => !!(await f.db.one('SELECT id FROM ai_jobs WHERE conversation_id=$1', [id])));
+      await f.db.query("UPDATE ai_jobs SET state='running', updated_at=now()-interval '4 minutes' WHERE conversation_id=$1", [id]);
+      await f.worker.step();
+      expect((await f.db.one('SELECT state FROM ai_jobs WHERE conversation_id=$1', [id])).state).toBe('running');
+      await f.db.query("UPDATE ai_jobs SET updated_at=now()-interval '13 minutes' WHERE conversation_id=$1", [id]);
+      await f.worker.step();
+      expect((await f.db.one('SELECT state FROM ai_jobs WHERE conversation_id=$1', [id])).state).toBe('done');
+      const messages = await api(boot, '/conversations/' + id + '/messages');
+      expect(messages.data.messages.at(-1).role).toBe('assistant');
+    } finally {
+      f.config.AI_TIMEOUT_MS = previousTimeout;
+    }
+  });
   it("submits a ticket once, keeps history and filters internal notes", async () => {
     const b = (await f.bootstrap(f.project, "ticket")).data,
       id = await chat(b);

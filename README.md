@@ -73,6 +73,8 @@ docker compose up -d
 
 TRUST_PROXY_HOPS 要与反代层数一致。不要在反代给 /widget 统一加 X-Frame-Options: DENY；应用按项目域名生成 frame-ancestors。
 
+MaxKB 单次调用默认及最大等待时间均为 10 分钟：`AI_TIMEOUT_MS=600000`，也可设置 1000–600000 之间的整数毫秒值。已有部署必须修改 `.env` 中的旧值并重建 support 容器，更新镜像不会覆盖显式配置。任务超时回收窗口随此值延长，Compose 的停止等待时间为 15 分钟。此调用在后台执行，浏览器通过短请求查询进度；如果 MaxKB 前面另外配置了反向代理，该代理也要允许至少 600 秒的上游等待时间。
+
 配置页面位于 /admin，使用 .env 的 ADMIN_TOKEN 登录。该令牌仅用于平台运营配置，客服人员继续使用 Chatwoot 账号。
 
 ### 没有域名时临时通过 IP 测试
