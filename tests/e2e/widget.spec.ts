@@ -7,14 +7,18 @@ test("project admin previews AI questions and submits an asynchronous ticket", a
   await page.getByLabel("管理令牌").fill(testAdmin);
   await page.getByRole("button", { name: "进入项目管理" }).click();
   await page.getByRole("button", { name: "测试项目 letaicode" }).click();
+  const questions = ["API Key 在哪里创建？", "如何充值？", "支持哪些模型？", "在哪里查看用量？", "如何提交工单？"];
+  await page.getByLabel(/预设问题（每行一个/).fill(questions.join("\n"));
+  await page.getByRole("button", { name: "保存配置", exact: true }).click();
+  await expect(page.getByText("配置已保存。新项目请先连接机器人，再启用并预览。")).toBeVisible();
   await page.getByRole("button", { name: "预览客服" }).click();
   const widget = page.frameLocator('iframe[title="客服预览"]');
-  await expect(
-    widget.getByRole("button", { name: "API Key 在哪里创建？", exact: true }),
-  ).toBeVisible();
-  await widget
-    .getByRole("button", { name: "API Key 在哪里创建？", exact: true })
-    .click();
+  const presets = widget.locator(".presets button");
+  await expect(presets).toHaveCount(3);
+  const shown = await presets.allTextContents();
+  expect(new Set(shown).size).toBe(3);
+  expect(shown.every((text) => questions.includes(text.trim()))).toBe(true);
+  await presets.first().click();
   await expect(widget.locator(".assistant .bubble")).toContainText(
     "知识库(letaicode)",
     { timeout: 15000 },

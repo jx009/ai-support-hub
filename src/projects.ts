@@ -4,6 +4,7 @@ import type { Config } from "./config.js";
 import { projectSchema, type Project, type Settings } from "./model.js";
 import { AppError, seal, unseal, validateUrl } from "./security.js";
 import { Chatwoot } from "./providers.js";
+import { sampleQuestions } from "./presets.js";
 export class Projects {
   constructor(
     readonly db: Database,
@@ -26,7 +27,7 @@ export class Projects {
       name: p.name,
       welcome: p.settings.welcome,
       color: p.settings.color,
-      questions: p.settings.questions.filter((q) => q.enabled),
+      questions: sampleQuestions(p.settings.questions),
       categories: p.settings.categories,
       configVersion: p.version,
     };

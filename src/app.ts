@@ -186,14 +186,15 @@ export function createApp(db: Database, config: Config) {
       origin: identity.origin,
       version: p.version,
     };
+    const project = projects.public(p);
     return {
-      project: projects.public(p),
+      project,
       session: { token: issueSession(s, config), expiresIn: 900 },
       embedOrigin: identity.origin,
       publicUrl: config.PUBLIC_URL,
       features: { aiChat: true, tickets: true },
       welcomeMessage: p.settings.welcome,
-      presetQuestions: p.settings.questions.filter((q) => q.enabled),
+      presetQuestions: project.questions,
       ticketCategories: p.settings.categories,
       configVersion: p.version,
     };

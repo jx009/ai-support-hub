@@ -421,7 +421,7 @@ export default function Admin() {
               />
             </label>
             <label>
-              预设问题（每行一个，初始化自动下发）
+              预设问题（每行一个，最多 30 个，每次随机显示 3 个）
               <textarea
                 rows={5}
                 value={questions}

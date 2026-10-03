@@ -8,7 +8,7 @@
 
 - 项目独立绑定 Chatwoot Account/API Inbox 与 MaxKB 应用。
 - API Key + HMAC 服务端初始化，15 分钟用户令牌，项目与用户归属校验。
-- 初始化包含预设问题、工单分类、品牌和欢迎语。
+- 初始化包含预设问题、工单分类、品牌和欢迎语。可维护最多 30 个问题，每次初始化随机显示最多 3 个不同的已启用问题；答案统一由 MaxKB 知识库提供。
 - AI 多轮问答、持久任务、按会话顺序处理、Webhook 去重、失败提示。
 - Chatwoot 4.18 的回调时间戳及 HMAC 验签，回调快速入队，异步调用模型。
 - 手动提工单、历史记录、补充留言、客服处理状态；不返回内部备注。
@@ -153,6 +153,7 @@ docker compose -f docker-compose.yml -f deploy/providers.compose.yml --profile p
 
 - 超级管理员菜单“AI 客服接入”：/admin/support-hub。
 - 登录用户右下角“联系客服”按钮。
+- “向所有人显示客服入口”开关默认关闭，此时只有管理员和超级管理员可见并使用。开启后访客也能看到入口，点击后先登录；“启用客服服务”总开关关闭时对所有人停用。
 - 服务端签名初始化，用户 ID/邮箱来自真实登录态。
 - 对 iframe 的来源和发送窗口校验；短期令牌只在内存传递。
 - 服务端 Option 加密保存项目 Secret；不新增业务数据库表。
@@ -162,6 +163,7 @@ docker compose -f docker-compose.yml -f deploy/providers.compose.yml --profile p
 
 ```dotenv
 SUPPORT_HUB_ENABLED=true
+SUPPORT_HUB_SHOW_TO_ALL=false
 SUPPORT_HUB_URL=https://support.example.com
 SUPPORT_HUB_PROJECT_CODE=letaicode
 SUPPORT_HUB_API_KEY=项目APIKey

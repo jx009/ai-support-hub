@@ -47,6 +47,21 @@ async function sendAndWork(boot: any, id: string, text: string) {
   await f.worker.step();
 }
 describe("Project identity and data boundaries", () => {
+  it("bootstrap sends the same three sampled questions in both API fields while retaining all admin settings", async () => {
+    const original = await f.projects.get(f.other.id);
+    const questions = Array.from({ length: 7 }, (_, i) => ({ id: `sample-${i}`, question: `预设问题 ${i}`, enabled: i !== 6 }));
+    try {
+      await f.projects.save({ ...original, settings: { ...original.settings, questions } }, original.id);
+      const boot = (await f.bootstrap(f.other, "sample-user")).data;
+      expect(boot.project.questions).toHaveLength(3);
+      expect(boot.presetQuestions).toEqual(boot.project.questions);
+      expect(new Set(boot.presetQuestions.map((q: any) => q.id)).size).toBe(3);
+      expect(boot.presetQuestions.every((q: any) => q.enabled && q.id !== "sample-6")).toBe(true);
+      expect((await f.projects.get(original.id)).settings.questions).toHaveLength(7);
+    } finally {
+      await f.projects.save(original, original.id);
+    }
+  });
   it("rejects a correct callback URL with missing Chatwoot HMAC", async () => {
     const p = await f.projects.get(f.project.id);
     const r = await fetch(f.projects.hookUrl(p), {
