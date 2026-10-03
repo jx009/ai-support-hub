@@ -69,7 +69,7 @@ docker compose build
 docker compose up -d
 ```
 
-应用端口只绑定宿主机 127.0.0.1:4080。使用宝塔/Nginx 配置 HTTPS 反代，参见 deploy/nginx.conf.example。PUBLIC_URL 必须是浏览器与 Chatwoot 都可访问的客服根地址。
+应用端口只绑定宿主机 127.0.0.1:6001。使用宝塔/Nginx 配置 HTTPS 反代，参见 deploy/nginx.conf.example。PUBLIC_URL 必须是浏览器与 Chatwoot 都可访问的客服根地址。已有部署需将 .env 的 SUPPORT_PORT 改为 6001，并同步修改反代目标；容器内部端口保持不变。
 
 TRUST_PROXY_HOPS 要与反代层数一致。不要在反代给 /widget 统一加 X-Frame-Options: DENY；应用按项目域名生成 frame-ancestors。
 
@@ -80,7 +80,7 @@ TRUST_PROXY_HOPS 要与反代层数一致。不要在反代给 /widget 统一加
 ```bash
 docker compose logs --tail=100 support
 docker compose logs --tail=100 migrate
-curl -f http://127.0.0.1:4080/health
+curl -f http://127.0.0.1:6001/health
 ```
 
 /health 检查接入服务及其数据库，不代表已经配置好两个上游。
@@ -95,8 +95,8 @@ docker compose -f docker-compose.yml -f deploy/providers.compose.yml --profile p
 docker compose -f docker-compose.yml -f deploy/providers.compose.yml --profile providers up -d
 ```
 
-- Chatwoot：宿主机 127.0.0.1:3008，CHATWOOT_PUBLIC_URL 配置 HTTPS 域名。
-- MaxKB：宿主机 127.0.0.1:8088，单独配置 HTTPS 域名。
+- Chatwoot：宿主机 127.0.0.1:6002，CHATWOOT_PUBLIC_URL 配置 HTTPS 域名。
+- MaxKB：宿主机 127.0.0.1:6003，单独配置 HTTPS 域名。
 - Chatwoot 配套数据库是 pgvector/pgvector:pg16，Redis 与后台任务进程随 Compose 配置。
 - MaxKB v2.10.6-lts 官方单容器方案挂载 /opt/maxkb，本文件已使用独立持久卷。
 - Chatwoot 数据库迁移由 chatwoot-migrate 执行；它与本项目的 migrate 无关。

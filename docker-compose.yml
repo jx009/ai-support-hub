@@ -44,7 +44,7 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${SUPPORT_PORT:-4080}:4080"
+      - "127.0.0.1:${SUPPORT_PORT:-6001}:4080"
     depends_on:
       support-db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }

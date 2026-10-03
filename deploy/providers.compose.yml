@@ -78,7 +78,7 @@ services:
     entrypoint: docker/entrypoints/rails.sh
     command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
     restart: unless-stopped
-    ports: ["127.0.0.1:3008:3000"]
+    ports: ["127.0.0.1:6002:3000"]
     depends_on:
       chatwoot-migrate: { condition: service_completed_successfully }
 
@@ -93,7 +93,7 @@ services:
     profiles: ["providers"]
     image: ${MAXKB_IMAGE:-1panel/maxkb:v2.10.6-lts}
     restart: unless-stopped
-    ports: ["127.0.0.1:8088:8080"]
+    ports: ["127.0.0.1:6003:8080"]
     volumes:
       - maxkb_data:/opt/maxkb
 
