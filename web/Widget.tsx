@@ -3,6 +3,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Bootstrap, Conversation, Message } from "./types";
 import { requestKey } from "./request-key";
+import { applySupportTheme } from "./theme";
 const statusLabel: Record<string, string> = {
   pending: "AI 接待",
   open: "待处理",
@@ -71,8 +72,12 @@ export default function Widget() {
   useEffect(() => {
     let accepting = true;
     const receive = (event: MessageEvent) => {
-      if (event.source !== window.parent || event.data?.type !== "support:init")
+      if (event.source !== window.parent) return;
+      if (event.data?.type === 'support:theme') {
+        if (bootRef.current && event.origin === bootRef.current.embedOrigin) applySupportTheme(event.data.theme);
         return;
+      }
+      if (event.data?.type !== "support:init") return;
       const b = event.data.bootstrap as Bootstrap;
       if (
         !b?.session?.token ||
@@ -82,6 +87,8 @@ export default function Widget() {
         return;
       if (new URL(b.publicUrl).origin !== location.origin) return;
       accepting = false;
+      applySupportTheme(event.data.theme);
+      bootRef.current = b;
       setBoot(b);
       setError("");
     };
@@ -299,7 +306,7 @@ export default function Widget() {
     <div
       className="widget"
       style={
-        { "--accent": boot?.project.color || "#4f46e5" } as React.CSSProperties
+        { "--project-accent": boot?.project.color || "#4f46e5" } as React.CSSProperties
       }
     >
       <header className="widget-header">

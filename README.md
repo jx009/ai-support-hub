@@ -156,6 +156,7 @@ docker compose -f docker-compose.yml -f deploy/providers.compose.yml --profile p
 - “向所有人显示客服入口”开关默认关闭，此时只有管理员和超级管理员可见并使用。开启后访客也能看到入口，点击后先登录；“启用客服服务”总开关关闭时对所有人停用。
 - 服务端签名初始化，用户 ID/邮箱来自真实登录态。
 - 对 iframe 的来源和发送窗口校验；短期令牌只在内存传递。
+- 客服聊天、历史工单和提交表单使用 LetAiCode 的字体、字号、背景、文字、边框及主色变量，跟随网站实时切换深浅模式，不重置对话或草稿。需要同时更新 LetAiCode 前端与客服服务镜像，无需数据库迁移。
 - 服务端 Option 加密保存项目 Secret；不新增业务数据库表。
 - 原有 Docker/GitHub Actions 的路径检测会构建新增后端和前端代码。
 
@@ -173,6 +174,10 @@ SUPPORT_HUB_API_SECRET=项目Secret
 后台保存的配置优先于环境默认值。原站数据库不用为此次接入执行 Prisma 迁移。
 
 ## 5. 其他网站接入
+
+自行嵌入 iframe 时，可以在 `support:init` 消息中附带可选的 `theme: { mode: 'light' | 'dark', tokens: {...} }`。`tokens` 为 CSS 变量名（不含 `--`）到已解析值的映射，例如 `primary-color`、`bg-container`、`text-primary`、`font-family`、`font-size`，完整允许列表见 `web/theme.ts`。省略主题时仍使用默认样式及项目主色。
+
+切换主题时向同一个 iframe 发送 `{ type: 'support:theme', theme }`，目标 origin 必须是客服服务的 origin。组件仅接受已初始化的父窗口和接入来源发送的主题消息；主题更新不会重新初始化会话。每次主题消息应包含完整的自定义 tokens，省略项恢复默认值。通用 `/widget.js` 嵌入脚本目前仍使用默认主题，LetAiCode 使用自己的主题同步组件。
 
 ### 网站后端：签名初始化
 
