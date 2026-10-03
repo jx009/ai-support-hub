@@ -28,6 +28,7 @@ x-chatwoot: &chatwoot
     SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     SMTP_AUTHENTICATION: ${SMTP_AUTHENTICATION:-login}
     SMTP_ENABLE_STARTTLS_AUTO: ${SMTP_ENABLE_STARTTLS_AUTO:-true}
+    SMTP_TLS: ${SMTP_TLS:-false}
 
 services:
   chatwoot-db:
