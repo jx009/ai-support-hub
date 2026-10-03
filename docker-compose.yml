@@ -1,0 +1,54 @@
+name: ai-support-hub
+
+x-app: &app
+  image: ${SUPPORT_IMAGE:-ai-support-hub}:${SUPPORT_IMAGE_TAG:-local}
+  build: .
+  environment: &app-env
+    NODE_ENV: production
+    PORT: 4080
+    DATABASE_URL: postgresql://support:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@support-db:5432/support
+    MASTER_KEY: ${MASTER_KEY:?Set MASTER_KEY}
+    ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN}
+    PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
+    TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+    ALLOW_HTTP_UPSTREAMS: ${ALLOW_HTTP_UPSTREAMS:-false}
+    AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-60000}
+    WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+
+services:
+  support-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: support
+      POSTGRES_USER: support
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - support_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support -d support"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  migrate:
+    <<: *app
+    command: ["node", "dist/server/migrate.js"]
+    restart: "no"
+    healthcheck: { disable: true }
+    depends_on:
+      support-db: { condition: service_healthy }
+
+  support:
+    <<: *app
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SUPPORT_PORT:-4080}:4080"
+    depends_on:
+      support-db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    stop_grace_period: 150s
+
+volumes:
+  support_db:

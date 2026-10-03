@@ -1,0 +1,104 @@
+# Optional upstream services. Merge with the root compose file.
+x-chatwoot: &chatwoot
+  image: ${CHATWOOT_IMAGE:-chatwoot/chatwoot:v4.18.0}
+  profiles: ["providers"]
+  volumes:
+    - chatwoot_storage:/app/storage
+  environment: &cw-env
+    NODE_ENV: production
+    RAILS_ENV: production
+    INSTALLATION_ENV: docker
+    SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE:?Set CHATWOOT_SECRET_KEY_BASE}
+    FRONTEND_URL: ${CHATWOOT_PUBLIC_URL:?Set CHATWOOT_PUBLIC_URL}
+    FORCE_SSL: "true"
+    ENABLE_ACCOUNT_SIGNUP: "false"
+    DEFAULT_LOCALE: zh_CN
+    POSTGRES_HOST: chatwoot-db
+    POSTGRES_PORT: 5432
+    POSTGRES_DATABASE: chatwoot
+    POSTGRES_USERNAME: postgres
+    POSTGRES_PASSWORD: ${CHATWOOT_DB_PASSWORD:?Set CHATWOOT_DB_PASSWORD}
+    REDIS_URL: redis://chatwoot-redis:6379
+    REDIS_PASSWORD: ${CHATWOOT_REDIS_PASSWORD:?Set CHATWOOT_REDIS_PASSWORD}
+    ACTIVE_STORAGE_SERVICE: local
+    MAILER_SENDER_EMAIL: ${MAILER_SENDER_EMAIL:-}
+    SMTP_ADDRESS: ${SMTP_ADDRESS:-}
+    SMTP_PORT: ${SMTP_PORT:-587}
+    SMTP_USERNAME: ${SMTP_USERNAME:-}
+    SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    SMTP_AUTHENTICATION: ${SMTP_AUTHENTICATION:-login}
+    SMTP_ENABLE_STARTTLS_AUTO: ${SMTP_ENABLE_STARTTLS_AUTO:-true}
+
+services:
+  chatwoot-db:
+    profiles: ["providers"]
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${CHATWOOT_DB_PASSWORD:?Set CHATWOOT_DB_PASSWORD}
+    volumes: [chatwoot_db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d chatwoot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  chatwoot-redis:
+    profiles: ["providers"]
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${CHATWOOT_REDIS_PASSWORD:?Set CHATWOOT_REDIS_PASSWORD}
+    command:
+      [
+        "sh",
+        "-c",
+        'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"',
+      ]
+    volumes: [chatwoot_redis:/data]
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  chatwoot-migrate:
+    <<: *chatwoot
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+    restart: "no"
+    depends_on:
+      chatwoot-db: { condition: service_healthy }
+      chatwoot-redis: { condition: service_healthy }
+
+  chatwoot:
+    <<: *chatwoot
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    restart: unless-stopped
+    ports: ["127.0.0.1:3008:3000"]
+    depends_on:
+      chatwoot-migrate: { condition: service_completed_successfully }
+
+  chatwoot-worker:
+    <<: *chatwoot
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    restart: unless-stopped
+    depends_on:
+      chatwoot-migrate: { condition: service_completed_successfully }
+
+  maxkb:
+    profiles: ["providers"]
+    image: ${MAXKB_IMAGE:-1panel/maxkb:v2.10.6-lts}
+    restart: unless-stopped
+    ports: ["127.0.0.1:8088:8080"]
+    volumes:
+      - maxkb_data:/opt/maxkb
+
+volumes:
+  chatwoot_db:
+  chatwoot_redis:
+  chatwoot_storage:
+  maxkb_data:

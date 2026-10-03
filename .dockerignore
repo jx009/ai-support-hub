@@ -1,0 +1,10 @@
+.git
+node_modules
+dist
+.env
+.env.*
+!package-lock.json
+test-results
+playwright-report
+.idea
+.vscode

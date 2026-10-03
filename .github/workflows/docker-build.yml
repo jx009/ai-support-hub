@@ -1,0 +1,93 @@
+name: Publish Support Hub (native multi-arch)
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*"]
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+  BUILD_TAG: build-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+concurrency:
+  group: support-publish-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    uses: ./.github/workflows/ci.yml
+  prepare:
+    needs: acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate image configuration
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKER_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKER_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]] || { echo "::error::Configure Docker Hub credentials"; exit 1; }
+          [[ "$IMAGE" =~ ^[a-z0-9][a-z0-9_-]*/[a-z0-9]+([._-][a-z0-9]+)*$ ]] || { echo "::error::Set DOCKERHUB_IMAGE=namespace/ai-support-hub"; exit 1; }
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+      - uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKER_PASSWORD }}
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.IMAGE }}:${{ env.BUILD_TAG }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=support-${{ matrix.arch }}
+          cache-to: type=gha,scope=support-${{ matrix.arch }},mode=max
+          provenance: mode=max
+          sbom: true
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+      - uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKER_PASSWORD }}
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=test-latest,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=sha,format=long
+            type=ref,event=tag
+      - name: Publish multi-arch tags
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] || args+=(--tag "$tag")
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" "$IMAGE:$BUILD_TAG-amd64" "$IMAGE:$BUILD_TAG-arm64"
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] || docker buildx imagetools inspect "$tag" >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$TAGS"
