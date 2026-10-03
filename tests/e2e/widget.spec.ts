@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { testAdmin } from "../fixture";
+import { randomUUID } from "node:crypto";
 test("project admin previews AI questions and submits an asynchronous ticket", async ({
   page,
 }) => {
@@ -44,4 +45,57 @@ test("project admin previews AI questions and submits an asynchronous ticket", a
       .locator("body")
       .evaluate((el) => el.scrollWidth <= window.innerWidth),
   ).toBe(true);
+});
+
+test("switching tickets ignores a late history response and updates the selected status", async ({ page, request }) => {
+  const projects = await (await request.get("/admin/api/projects", { headers: { Authorization: "Bearer " + testAdmin } })).json();
+  const project = projects.find((p: any) => p.code === "letaicode");
+  const boot = await (await request.post(`/admin/api/projects/${project.id}/preview`, { headers: { Authorization: "Bearer " + testAdmin } })).json();
+  const post = async (path: string, data: unknown) => {
+    const response = await request.post('/support/v1' + path, { headers: {
+      Authorization: 'Bearer ' + boot.session.token,
+      'X-Embed-Origin': boot.embedOrigin,
+      'Idempotency-Key': randomUUID(),
+    }, data });
+    expect(response.ok()).toBe(true);
+    return response.json();
+  };
+  const a = await post('/conversations', {});
+  await post('/tickets', { conversationId: a.id, category: 'technical', description: '工单 A 的问题' });
+  const b = await post('/conversations', {});
+  await post('/tickets', { conversationId: b.id, category: 'technical', description: '工单 B 的问题' });
+  let release!: () => void;
+  let historyRequested = false;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**/support/v1/conversations/${a.id}/messages?before=*`, async route => {
+    historyRequested = true;
+    await gate;
+    await route.fulfill({ json: { messages: [{ id: 1, content: '迟到的 A 历史消息', role: 'user', createdAt: 0 }], before: null } });
+  });
+  await page.route(`**/support/v1/conversations/${b.id}/messages`, async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.conversation.status = 'resolved';
+    await route.fulfill({ json: data });
+  });
+  try {
+    await page.goto('/admin');
+    await page.getByLabel('管理令牌').fill(testAdmin);
+    await page.getByRole('button', { name: '进入项目管理' }).click();
+    await page.getByRole('button', { name: '测试项目 letaicode' }).click();
+    await page.getByRole('button', { name: '预览客服' }).click();
+    const widget = page.frameLocator('iframe[title="客服预览"]');
+    await widget.getByRole('button', { name: '▤ 我的工单' }).click();
+    await widget.getByRole('button', { name: /工单 A 的问题/ }).click();
+    await expect(widget.locator('.messages')).toContainText('工单 A 的问题');
+    await widget.getByRole('button', { name: '查看更早消息' }).click();
+    await expect.poll(() => historyRequested).toBe(true);
+    await widget.getByRole('button', { name: /工单 B 的问题/ }).click();
+    await expect(widget.locator('.messages')).toContainText('工单 B 的问题');
+    const response = page.waitForResponse(r => r.url().includes(a.id + '/messages?before='));
+    release();
+    await response;
+    await expect(widget.locator('.messages')).not.toContainText('迟到的 A 历史消息');
+    await expect(widget.locator('.ticket-item.active')).toContainText('已解决');
+  } finally { release(); }
 });

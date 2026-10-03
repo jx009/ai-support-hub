@@ -26,6 +26,7 @@ export default function Widget() {
   const [hasMore, setHasMore] = useState(false),
     lastRefresh = useRef(0);
   const [cursor, setCursor] = useState<number | null>(null),
+    [loadingOlder, setLoadingOlder] = useState(false),
     [ready, setReady] = useState(false);
   const bootRef = useRef(boot),
     currentRef = useRef(current),
@@ -140,6 +141,9 @@ export default function Widget() {
         old === null ? r.before : Math.min(old, r.before || old),
       );
       setBusy(r.busy);
+      setConversations((old) => old.map((item) => item.id === c.id
+        ? { ...item, status: r.conversation.status, ticket: r.conversation.ticket }
+        : item));
       setCurrent((old) =>
         old?.id === c.id
           ? {
@@ -151,7 +155,7 @@ export default function Widget() {
       );
       if (r.failed) setError("AI 处理暂时失败，可提交工单或稍后重新提问。");
     } catch (e) {
-      setError((e as Error).message);
+      if (currentRef.current?.id === c.id) setError((e as Error).message);
     } finally {
       polling.current = false;
     }
@@ -208,6 +212,7 @@ export default function Widget() {
     }
   }
   function newChat() {
+    if (sending) return;
     setCurrent(null);
     currentRef.current = null;
     createKey.current = requestKey();
@@ -219,6 +224,7 @@ export default function Widget() {
     setTab("ai");
   }
   function openTicket() {
+    if (sending) return;
     setCategory(boot?.project.categories[0]?.code || "");
     setDescription("");
     ticketKey.current = requestKey();
@@ -270,15 +276,20 @@ export default function Widget() {
     }
   }
   async function older() {
-    if (!current || !cursor) return;
+    if (!current || !cursor || loadingOlder) return;
+    const id = current.id;
+    setLoadingOlder(true);
     try {
       const r = await call(
         "/conversations/" + current.id + "/messages?before=" + cursor,
       );
-      setMessages((old) => [...r.messages, ...old]);
+      if (currentRef.current?.id !== id) return;
+      setMessages((old) => [...new Map([...r.messages, ...old].map((m: Message) => [m.id, m])).values()].sort((a, b) => a.id - b.id));
       setCursor(r.before);
     } catch (e) {
-      setError((e as Error).message);
+      if (currentRef.current?.id === id) setError((e as Error).message);
+    } finally {
+      setLoadingOlder(false);
     }
   }
   const tickets = conversations.filter(
@@ -308,6 +319,7 @@ export default function Widget() {
       <nav className="tabs">
         <button
           className={tab === "ai" ? "selected" : ""}
+          disabled={sending}
           onClick={() => {
             setTab("ai");
             if (current?.ticket) newChat();
@@ -317,6 +329,7 @@ export default function Widget() {
         </button>
         <button
           className={tab === "tickets" ? "selected" : ""}
+          disabled={sending}
           onClick={() => {
             setTab("tickets");
             void refreshList().catch((e) => setError(e.message));
@@ -331,7 +344,11 @@ export default function Widget() {
           <button
             onClick={() => {
               setError("");
-              void refreshMessages();
+              if (!ready) setBoot((old) => old ? { ...old } : old);
+              else {
+                void refreshMessages();
+                void refreshList().catch((e) => setError(e.message));
+              }
             }}
           >
             刷新
@@ -370,6 +387,7 @@ export default function Widget() {
               <aside className="ticket-list">
                 <button
                   className="primary"
+                  disabled={sending}
                   onClick={() => {
                     newChat();
                     setTab("tickets");
@@ -391,7 +409,8 @@ export default function Widget() {
                     className={
                       "ticket-item " + (current?.id === c.id ? "active" : "")
                     }
-                    onClick={() => setCurrent(c)}
+                    disabled={sending}
+                    onClick={() => { currentRef.current = c; setCurrent(c); setError(""); }}
                   >
                     <strong>{c.subject || "咨询工单"}</strong>
                     <small>{statusLabel[c.status] || c.status}</small>
@@ -415,6 +434,7 @@ export default function Widget() {
                     {cursor && (
                       <button
                         className="load-older"
+                        disabled={loadingOlder}
                         onClick={() => void older()}
                       >
                         查看更早消息
@@ -495,10 +515,10 @@ export default function Widget() {
                     <div className="composer-actions">
                       {!current?.ticket && (
                         <>
-                          <button type="button" onClick={newChat}>
+                          <button type="button" disabled={sending} onClick={newChat}>
                             ＋ 新会话
                           </button>
-                          <button type="button" onClick={openTicket}>
+                          <button type="button" disabled={sending} onClick={openTicket}>
                             未解决？提交工单
                           </button>
                         </>
